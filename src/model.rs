@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::{BTreeMap, HashMap}, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use time::{Date, OffsetDateTime};
@@ -14,7 +14,7 @@ pub struct DateInfoEventMode {
 pub struct DateInfo {
     pub date: Date,
     pub holiday: Option<String>,
-    pub events: Vec<DateInfoEventMode>,
+    pub events: HashMap<String, DateInfoEventMode>,
 }
 
 pub type CalendarMap = BTreeMap<Date, DateInfo>;

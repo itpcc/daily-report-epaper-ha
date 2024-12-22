@@ -1,6 +1,11 @@
-FROM lukemathwalker/cargo-chef:0.1.62-rust-bookworm as chef
+FROM lukemathwalker/cargo-chef:0.1.68-rust-bookworm as chef
 WORKDIR /app
-RUN apt update && apt install lld clang -y
+# Change mirror to KKU to speed up resolving
+RUN sed -i 's/deb\.debian\.org/mirror.kku.ac.th/g' /etc/apt/sources.list.d/debian.sources
+# KKU don't have debian-security
+RUN sed -i 's/mirror\.kku\.ac\.th\/debian-security/mirror.sg.gs\/debian-security/g' /etc/apt/sources.list.d/debian.sources
+# RUN cat /etc/apt/sources.list.d/debian.sources
+RUN apt-get update && apt-get install lld clang -y
 
 FROM chef as planner
 COPY . .
@@ -21,6 +26,10 @@ FROM debian:bookworm-slim AS runtime
 # Set the working directory
 WORKDIR /app
 
+# Change mirror to KKU to speed up resolving
+RUN sed -i 's/deb\.debian\.org/mirror.kku.ac.th/g' /etc/apt/sources.list.d/debian.sources
+# KKU don't have debian-security
+RUN sed -i 's/mirror\.kku\.ac\.th\/debian-security/mirror.sg.gs\/debian-security/g' /etc/apt/sources.list.d/debian.sources
 # Install runtime dependencies
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends ca-certificates \

@@ -78,8 +78,6 @@ pub async fn epaper_page(State(state): State<AppState>) -> impl IntoResponse {
         clnd_n
     };
 
-    tracing::debug!("calendar: {:?}", calendar);
-
     // Colours
     let red = Rgb([255u8, 0u8, 0u8]);
     let black = Rgb([0u8, 0u8, 0u8]);
@@ -274,7 +272,7 @@ pub async fn epaper_page(State(state): State<AppState>) -> impl IntoResponse {
             break;
         }
 
-        for event in c_info.events {
+        for (_uid, event) in c_info.events {
             let event_name = substr_th(event.name, 32);
 
             drawing::draw_text_mut(

@@ -87,9 +87,11 @@ async fn fetch_event(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiErr
     let mut calendar = calendar.write().await;
 
     event_icals.into_iter().for_each(|evnt| {
-        let (Some(dtstart), Some(summary)) = (
+        let (Some(dtstart), Some(summary), Some(uid)) = (
             evnt.get_property("DTSTART"),
             evnt.get_property("SUMMARY")
+                .and_then(|p| p.value.to_owned()),
+            evnt.get_property("UID")
                 .and_then(|p| p.value.to_owned()),
         ) else {
             return;
@@ -130,7 +132,7 @@ async fn fetch_event(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiErr
             holiday: Default::default(),
             events: Default::default(),
         });
-        c_nty.events.push(DateInfoEventMode {
+        c_nty.events.insert(uid, DateInfoEventMode {
             time: dtstart_odt,
             name: summary,
         });
