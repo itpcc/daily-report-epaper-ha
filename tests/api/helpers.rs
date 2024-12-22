@@ -1,10 +1,11 @@
 use axum::{body::Body, http::Request, http::Response, Router};
 use sqlx::{Connection, Executor, PgConnection};
-use std::sync::Once;
+use std::sync::{Arc, Once};
+use tokio::sync::RwLock;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use server::{router, telemetry, Configuration, Db};
+use server::{model::CalendarMap, telemetry, Configuration, Db};
 
 static TRACING: Once = Once::new();
 
@@ -39,7 +40,11 @@ impl TestApp {
         tracing::debug!("Running migrations");
         db.migrate().await.expect("Failed to run migrations");
 
-        let router = router(cfg, db.clone());
+        // Initialize calendar state
+        let calendar = Arc::new(RwLock::new(CalendarMap::new()));
+        let weather = Arc::new(RwLock::new(Default::default()));
+
+        let router = server::router(cfg.clone(), db.clone(), calendar.clone(), weather.clone());
         Self { db, router }
     }
 

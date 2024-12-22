@@ -21,6 +21,19 @@ pub struct Configuration {
     pub db_dsn: String,
     /// The maximum number of connections for the PostgreSQL pool.
     pub db_pool_max_size: u32,
+
+    pub tz: String,
+
+    // * iCal list
+    pub ical_holiday: String,
+    pub ical_event: String,
+
+    // * Home Assistant
+    pub ha_url: String,
+    pub ha_token: String,
+
+    // * Authentication
+    pub access_token: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -48,12 +61,28 @@ impl Configuration {
 
         let listen_address = SocketAddr::from((Ipv6Addr::UNSPECIFIED, app_port));
 
+        let tz = env_var("TZ");
+
+        let ical_holiday = env_var("ICAL_HOLIDAY");
+        let ical_event = env_var("ICAL_EVENT");
+
+        let ha_url = env_var("HA_URL");
+        let ha_token = env_var("HA_TOKEN");
+
+        let access_token = env_var("ACCESS_TOKEN");
+
         Arc::new(Configuration {
             env,
             listen_address,
             app_port,
             db_dsn,
             db_pool_max_size,
+            tz,
+            ical_holiday,
+            ical_event,
+            ha_url,
+            ha_token,
+            access_token,
         })
     }
 

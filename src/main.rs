@@ -1,5 +1,7 @@
-use server::{telemetry, Configuration, Db};
-use tokio::net::TcpListener;
+use std::sync::Arc;
+
+use server::{cron, model::CalendarMap, telemetry, Configuration, Db};
+use tokio::{net::TcpListener, sync::RwLock};
 
 #[tokio::main]
 async fn main() {
@@ -24,13 +26,29 @@ async fn main() {
     tracing::debug!("Running migrations");
     db.migrate().await.expect("Failed to run migrations");
 
+    // Initialize calendar state
+    let calendar = Arc::new(RwLock::new(CalendarMap::new()));
+    let weather = Arc::new(RwLock::new(Default::default()));
+
     // Spin up our server.
     tracing::info!("Starting server on {}", cfg.listen_address);
     let listener = TcpListener::bind(&cfg.listen_address)
         .await
         .expect("Failed to bind address");
-    let router = server::router(cfg, db);
-    axum::serve(listener, router)
+    let router = server::router(cfg.clone(), db, calendar.clone(), weather.clone());
+    let http_task = async {
+        axum::serve(listener, router)
+            .await
+            .expect("Failed to start server");
+    };
+
+    // Spin up cron
+    let cron = cron::setup(cfg.clone(), calendar.clone(), weather.clone())
         .await
-        .expect("Failed to start server")
+        .expect("Failed to start Cron");
+    let cron_task = async {
+        cron.start().await.expect("Failed to run Cron");
+    };
+
+    let _res = tokio::join!(http_task, cron_task);
 }

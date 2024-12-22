@@ -1,23 +1,45 @@
+use std::sync::Arc;
+
 use axum::Router;
 
 pub mod api_error;
 pub mod cfg;
+pub mod cron;
 pub mod db;
 pub mod middleware;
+pub mod model;
 pub mod routes;
 pub mod telemetry;
 
 pub use cfg::*;
 pub use db::*;
+use model::{CalendarMap, WeatherInfoArc};
+use time_tz::{timezones, Tz};
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
     pub cfg: Config,
+    pub tz: &'static Tz,
+    pub calendar: Arc<RwLock<CalendarMap>>,
+    pub weather: WeatherInfoArc,
 }
 
-pub fn router(cfg: Config, db: Db) -> Router {
-    let app_state = AppState { db, cfg };
+pub fn router(
+    cfg: Config,
+    db: Db,
+    calendar: Arc<RwLock<CalendarMap>>,
+    weather: WeatherInfoArc,
+) -> Router {
+    let tz = timezones::get_by_name(&cfg.tz).unwrap_or(timezones::db::UTC);
+    let app_state = AppState {
+        db,
+        cfg,
+        tz,
+        calendar,
+        weather,
+    };
 
     // Middleware that adds high level tracing to a Service.
     // Trace comes with good defaults but also supports customizing many aspects of the output:
@@ -54,5 +76,9 @@ pub fn router(cfg: Config, db: Db) -> Router {
         .layer(propagate_request_id_layer)
         .layer(trace_layer)
         .layer(request_id_layer)
+        .layer(axum::middleware::from_fn_with_state(
+            app_state.clone(),
+            middleware::auth_check_layer,
+        ))
         .with_state(app_state)
 }

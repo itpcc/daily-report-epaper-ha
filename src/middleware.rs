@@ -1,7 +1,12 @@
 use std::time::Duration;
 
-use axum::http::HeaderName;
-use hyper::Request;
+use axum::{
+    extract::{Query, Request, State},
+    http::{self, HeaderName, StatusCode},
+    middleware::Next,
+    response::Response,
+};
+use serde::Deserialize;
 use tower_http::{
     cors::{AllowHeaders, Any, CorsLayer},
     normalize_path::NormalizePathLayer,
@@ -9,8 +14,15 @@ use tower_http::{
     timeout::TimeoutLayer,
 };
 
+use crate::AppState;
+
 #[derive(Clone, Default)]
 pub struct Id;
+
+#[derive(Clone, Default, Deserialize)]
+pub struct QueryAuthModel {
+    pub token: String,
+}
 
 impl MakeRequestId for Id {
     fn make_request_id<B>(&mut self, _: &Request<B>) -> Option<RequestId> {
@@ -58,4 +70,31 @@ pub fn timeout_layer() -> TimeoutLayer {
 /// will be changed to `/foo` before reaching the inner service.
 pub fn normalize_path_layer() -> NormalizePathLayer {
     NormalizePathLayer::trim_trailing_slash()
+}
+
+/// Middleware for authorization check
+pub async fn auth_check_layer(
+    State(state): State<AppState>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let auth_header = req
+        .headers()
+        .get(http::header::AUTHORIZATION)
+        .and_then(|header| header.to_str().ok());
+    let auth_q = Query::<QueryAuthModel>::try_from_uri(req.uri());
+
+    let auth_token = if let Some(auth_header) = auth_header {
+        auth_header
+    } else if let Ok(aq) = auth_q.as_ref() {
+        aq.token.as_ref()
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    };
+
+    if auth_token != state.cfg.access_token {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    Ok(next.run(req).await)
 }
