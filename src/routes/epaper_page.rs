@@ -8,7 +8,7 @@ use image::{
     imageops::{
         colorops::{contrast_in_place, dither},
         BiLevel,
-    }, Luma, LumaA, Pixel
+    }, Luma, Pixel, Rgba
 };
 use imageproc::{
     drawing,
@@ -426,7 +426,7 @@ pub async fn epaper_page(
             dither(&mut bw_img, &BiLevel);
             map_pixels(&bw_img, |_x, _y, p| {
                 let l = p.channels()[0];
-                LumaA([l, l])
+                Rgba([l, 0_u8, 0_u8, l])
             }).write_to(&mut img_buf, ImageFormat::Png)
         }
     } {
