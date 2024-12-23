@@ -5,7 +5,10 @@ use axum::{
     response::IntoResponse,
 };
 use image::{
-    imageops::{colorops::{contrast_in_place, dither}, BiLevel},
+    imageops::{
+        colorops::{contrast_in_place, dither},
+        BiLevel,
+    },
     Luma, LumaA, Pixel,
 };
 use imageproc::{
@@ -93,9 +96,15 @@ pub async fn epaper_page(
     };
     let is_holiday = match time_date.weekday() {
         Weekday::Sunday | Weekday::Saturday => true,
-        _ => calendar.get(&time_date).map(|c| c.holiday.is_some()).unwrap_or(false)
+        _ => calendar
+            .get(&time_date)
+            .map(|c| c.holiday.is_some())
+            .unwrap_or(false),
     };
-    let is_event = calendar.get(&time_date).map(|c| ! c.events.is_empty()).unwrap_or(false);
+    let is_event = calendar
+        .get(&time_date)
+        .map(|c| !c.events.is_empty())
+        .unwrap_or(false);
 
     // Colours
     let red = Rgb([255u8, 0u8, 0u8]);
@@ -171,12 +180,11 @@ pub async fn epaper_page(
                     &mut image,
                     white,
                     (date_day_box_l + x) as i32,
-                    (date_day_box_t + y) as i32
+                    (date_day_box_t + y) as i32,
                 );
             });
         });
     }
-
 
     let date_day_str = time_local.day().to_string();
     let date_day_scale = PxScale {
@@ -188,7 +196,11 @@ pub async fn epaper_page(
     drawing::draw_text_mut(
         &mut image,
         white,
-        (border_px + (u32::max((border_px as f64 * 0.75) as u32, date_day_box_w.abs_diff(date_day_txt_sz_w) / 2))) as i32,
+        (border_px
+            + (u32::max(
+                (border_px as f64 * 0.75) as u32,
+                date_day_box_w.abs_diff(date_day_txt_sz_w) / 2,
+            ))) as i32,
         border_px as i32,
         date_day_scale,
         &font_anta,
@@ -329,7 +341,7 @@ pub async fn epaper_page(
                 &mut image,
                 Rect::at(date_box_l as i32, event_y_pos as i32)
                     .of_size(img_w - border_px - date_box_l, date_box_h),
-                    gray,
+                gray,
             );
             drawing::draw_text_mut(
                 &mut image,
@@ -369,9 +381,8 @@ pub async fn epaper_page(
     let last_upd_at_t = last_update_y - (border_px / 2);
     drawing::draw_filled_rect_mut(
         &mut image,
-        Rect::at(0_i32, last_upd_at_t as i32)
-            .of_size(img_w, img_h - last_upd_at_t),
-            gray,
+        Rect::at(0_i32, last_upd_at_t as i32).of_size(img_w, img_h - last_upd_at_t),
+        gray,
     );
     drawing::draw_text_mut(
         &mut image,
