@@ -66,12 +66,13 @@ pub type WeatherInfoArc = Arc<RwLock<Option<WeatherInfo>>>;
 
 // * Route mode
 
-#[derive(Deserialize, Default, Debug)]
-#[serde(rename_all = "lowercase")]
+#[derive(Deserialize, Default, Debug, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub enum QueryRouteEPaperOutputEnum {
     #[default]
     Full,
     Black,
+    BlackInvert,
     Red,
 }
 

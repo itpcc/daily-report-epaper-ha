@@ -403,11 +403,16 @@ pub async fn epaper_page(
     if let Err(e) = match q.output {
         OutputEnum::Full => image.write_to(&mut img_buf, ImageFormat::Png),
         // Paint black only black. Otherwise White
-        OutputEnum::Black => {
+        OutputEnum::Black | OutputEnum::BlackInvert => {
             let mut bw_img = map_pixels(&image, |_x, _y, p| {
                 let red = p.channels()[0];
                 let blue = p.channels()[2];
-                Luma([(red | blue)])
+                let target_luma = red | blue;
+                Luma([if q.output == OutputEnum::BlackInvert {
+                    !target_luma
+                } else {
+                    target_luma
+                }])
             });
             dither(&mut bw_img, &BiLevel);
             bw_img.write_to(&mut img_buf, ImageFormat::Png)
