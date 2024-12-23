@@ -8,8 +8,7 @@ use image::{
     imageops::{
         colorops::{contrast_in_place, dither},
         BiLevel,
-    },
-    Luma, Pixel,
+    }, Luma, LumaA, Pixel
 };
 use imageproc::{
     drawing,
@@ -425,7 +424,10 @@ pub async fn epaper_page(
                 Luma([(red & (!blue))])
             });
             dither(&mut bw_img, &BiLevel);
-            bw_img.write_to(&mut img_buf, ImageFormat::Png)
+            map_pixels(&bw_img, |_x, _y, p| {
+                let l = p.channels()[0];
+                LumaA([l, l])
+            }).write_to(&mut img_buf, ImageFormat::Png)
         }
     } {
         return ApiError::InternalError(e.into()).into_response();
