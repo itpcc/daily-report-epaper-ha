@@ -60,3 +60,23 @@ pub struct WeatherInfo {
 }
 
 pub type WeatherInfoArc = Arc<RwLock<Option<WeatherInfo>>>;
+
+
+// * Route mode
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all="lowercase")]
+pub enum QueryRouteEPaperOutputEnum {
+    #[default]
+    Full,
+    Black,
+    Red
+}
+
+#[derive(Deserialize, Default)]
+pub struct QueryRouteEPaperModel {
+    #[serde(default)]
+    pub output: QueryRouteEPaperOutputEnum,
+}
+
+

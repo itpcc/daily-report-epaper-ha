@@ -1,9 +1,8 @@
 use ab_glyph::{FontRef, InvalidFont, PxScale};
-use axum::{extract::State, http::HeaderValue, response::IntoResponse};
+use axum::{extract::{Query, State}, http::HeaderValue, response::IntoResponse};
+use image::{Luma, Pixel, Rgba};
 use imageproc::{
-    drawing,
-    image::{ImageFormat, Rgb, RgbImage},
-    rect::Rect,
+    drawing, image::{ImageFormat, Rgb, RgbImage}, map::map_pixels, rect::Rect
 };
 use itertools::Itertools;
 use std::io::{BufWriter, Cursor};
@@ -12,7 +11,7 @@ use time_tz::{timezones, OffsetDateTimeExt};
 
 use crate::{
     api_error::ApiError,
-    model::{CalendarMap, WeatherInfoState},
+    model::{CalendarMap, WeatherInfoState, QueryRouteEPaperModel, QueryRouteEPaperOutputEnum as OutputEnum},
     AppState,
 };
 
@@ -60,7 +59,10 @@ fn substr_th(str: String, len: usize) -> String {
     res_str
 }
 
-pub async fn epaper_page(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn epaper_page(
+    State(state): State<AppState>,
+    Query(q): Query<QueryRouteEPaperModel>
+) -> impl IntoResponse {
     // TODO place real value
     let time_utc = time::OffsetDateTime::now_utc();
     let time_local =
@@ -321,7 +323,21 @@ pub async fn epaper_page(State(state): State<AppState>) -> impl IntoResponse {
     // Save the response
     let mut img_buf = BufWriter::new(Cursor::new(Vec::new()));
 
-    if let Err(e) = image.write_to(&mut img_buf, ImageFormat::Png) {
+    if let Err(e) = match q.output {
+        OutputEnum::Full => image.write_to(&mut img_buf, ImageFormat::Png),
+        // Paint black only black. Otherwise White
+        OutputEnum::Black => map_pixels(&image, |_x, _y, p| {
+            let red = p.channels()[0];
+            let blue = p.channels()[2];
+            Luma([red | blue])
+        }).write_to(&mut img_buf, ImageFormat::Png),
+        // Paint Red only Red. Otherwise transparent
+        OutputEnum::Red => map_pixels(&image, |_x, _y, p| {
+            let red = p.channels()[0];
+            let blue = p.channels()[2];
+            Rgba([255_u8, 0_u8, 0_u8, (red & (! blue))])
+        }).write_to(&mut img_buf, ImageFormat::Png)
+    } {
         return ApiError::InternalError(e.into()).into_response();
     }
 
