@@ -1,17 +1,30 @@
 use ab_glyph::{FontRef, InvalidFont, PxScale};
-use axum::{extract::{Query, State}, http::HeaderValue, response::IntoResponse};
-use image::{Luma, Pixel, Rgba};
+use axum::{
+    extract::{Query, State},
+    http::HeaderValue,
+    response::IntoResponse,
+};
+use image::{
+    imageops::{colorops::{contrast_in_place, dither}, BiLevel},
+    Luma, LumaA, Pixel,
+};
 use imageproc::{
-    drawing, image::{ImageFormat, Rgb, RgbImage}, map::map_pixels, rect::Rect
+    drawing,
+    image::{ImageFormat, Rgb, RgbImage},
+    map::map_pixels,
+    rect::Rect,
 };
 use itertools::Itertools;
 use std::io::{BufWriter, Cursor};
-use time::Month;
+use time::{Month, Weekday};
 use time_tz::{timezones, OffsetDateTimeExt};
 
 use crate::{
     api_error::ApiError,
-    model::{CalendarMap, WeatherInfoState, QueryRouteEPaperModel, QueryRouteEPaperOutputEnum as OutputEnum},
+    model::{
+        CalendarMap, QueryRouteEPaperModel, QueryRouteEPaperOutputEnum as OutputEnum,
+        WeatherInfoState,
+    },
     AppState,
 };
 
@@ -61,14 +74,13 @@ fn substr_th(str: String, len: usize) -> String {
 
 pub async fn epaper_page(
     State(state): State<AppState>,
-    Query(q): Query<QueryRouteEPaperModel>
+    Query(q): Query<QueryRouteEPaperModel>,
 ) -> impl IntoResponse {
     // TODO place real value
     let time_utc = time::OffsetDateTime::now_utc();
     let time_local =
         time_utc.to_timezone(timezones::get_by_name("Asia/Bangkok").unwrap_or(timezones::db::UTC));
     let time_date = time_local.date();
-    let is_event = true;
     let calendar = {
         let clnd = state.calendar.read().await;
         let mut clnd_n = CalendarMap::new();
@@ -79,20 +91,38 @@ pub async fn epaper_page(
 
         clnd_n
     };
+    let is_holiday = match time_date.weekday() {
+        Weekday::Sunday | Weekday::Saturday => true,
+        _ => calendar.get(&time_date).map(|c| c.holiday.is_some()).unwrap_or(false)
+    };
+    let is_event = calendar.get(&time_date).map(|c| ! c.events.is_empty()).unwrap_or(false);
 
     // Colours
     let red = Rgb([255u8, 0u8, 0u8]);
     let black = Rgb([0u8, 0u8, 0u8]);
+    let gray = Rgb([137u8, 136u8, 136u8]);
     let white = Rgb([255u8, 255u8, 255u8]);
     // Fonts
-    let (font_anta, font_chakra_r, font_chakra_b, font_material) = match (|| {
-        Ok::<(FontRef<'_>, FontRef<'_>, FontRef<'_>, FontRef<'_>), InvalidFont>((
+    let (font_anta, font_chakra_r, font_chakra_b, font_chakra_sb, font_material) = match (|| {
+        Ok::<
+            (
+                FontRef<'_>,
+                FontRef<'_>,
+                FontRef<'_>,
+                FontRef<'_>,
+                FontRef<'_>,
+            ),
+            InvalidFont,
+        >((
             FontRef::try_from_slice(include_bytes!("../../fonts/Anta/Anta-Regular.ttf"))?,
             FontRef::try_from_slice(include_bytes!(
                 "../../fonts/Chakra_Petch/ChakraPetch-Regular.ttf"
             ))?,
             FontRef::try_from_slice(include_bytes!(
                 "../../fonts/Chakra_Petch/ChakraPetch-Bold.ttf"
+            ))?,
+            FontRef::try_from_slice(include_bytes!(
+                "../../fonts/Chakra_Petch/ChakraPetch-SemiBold.ttf"
             ))?,
             FontRef::try_from_slice(include_bytes!(
                 "../../fonts/materialdesignicons-webfont.ttf"
@@ -121,16 +151,33 @@ pub async fn epaper_page(
     let date_day_box_w = 90;
     let date_day_box_h = 120;
     let date_day_box_l = border_px + 10;
+    let date_day_box_t = border_px;
     let left_box_w = date_day_box_w + (date_day_box_l * 2);
     drawing::draw_filled_rect_mut(
         &mut image,
-        Rect::at(date_day_box_l as i32, border_px as i32).of_size(date_day_box_w, date_day_box_h),
-        match is_event {
+        Rect::at(date_day_box_l as i32, date_day_box_t as i32)
+            .of_size(date_day_box_w, date_day_box_h),
+        match is_holiday {
             true => red,
             false => black,
         },
     );
-    // TODO stripe if weekend
+
+    if is_event {
+        // draw dots
+        (0..date_day_box_w).step_by(4).for_each(|x| {
+            (0..date_day_box_h).step_by(4).for_each(|y| {
+                drawing::draw_cross_mut(
+                    &mut image,
+                    white,
+                    (date_day_box_l + x) as i32,
+                    (date_day_box_t + y) as i32
+                );
+            });
+        });
+    }
+
+
     let date_day_str = time_local.day().to_string();
     let date_day_scale = PxScale {
         x: 90.0,
@@ -141,7 +188,7 @@ pub async fn epaper_page(
     drawing::draw_text_mut(
         &mut image,
         white,
-        (border_px + (date_day_box_w.abs_diff(date_day_txt_sz_w) / 2)) as i32,
+        (border_px + (u32::max((border_px as f64 * 0.75) as u32, date_day_box_w.abs_diff(date_day_txt_sz_w) / 2))) as i32,
         border_px as i32,
         date_day_scale,
         &font_anta,
@@ -277,6 +324,13 @@ pub async fn epaper_page(
         for (_uid, event) in c_info.events {
             let event_name = substr_th(event.name, 32);
 
+            // Draw box for better visibility on ePaper
+            drawing::draw_filled_rect_mut(
+                &mut image,
+                Rect::at(date_box_l as i32, event_y_pos as i32)
+                    .of_size(img_w - border_px - date_box_l, date_box_h),
+                    gray,
+            );
             drawing::draw_text_mut(
                 &mut image,
                 match is_holiday {
@@ -298,7 +352,8 @@ pub async fn epaper_page(
                 (date_box_l + border_px + ((event_fnt_scale.x * 2.5) as u32)) as i32,
                 (event_y_pos + (border_px / 2)) as i32,
                 event_fnt_scale,
-                &font_chakra_r,
+                // _r is too slim when render
+                &font_chakra_sb,
                 &event_name,
             );
             event_y_pos += event_fnt_sz + (border_px / 2);
@@ -310,15 +365,26 @@ pub async fn epaper_page(
     }
 
     // Last update
+    // Draw box for better visibility on ePaper
+    let last_upd_at_t = last_update_y - (border_px / 2);
+    drawing::draw_filled_rect_mut(
+        &mut image,
+        Rect::at(0_i32, last_upd_at_t as i32)
+            .of_size(img_w, img_h - last_upd_at_t),
+            gray,
+    );
     drawing::draw_text_mut(
         &mut image,
         black,
         border_px as i32,
         last_update_y as i32,
         PxScale { x: 12.0, y: 12.0 },
-        &font_anta,
+        &font_chakra_sb,
         &format! {"Last update: {}", time_local.replace_nanosecond(0).unwrap_or(time_local)},
     );
+
+    // Adjust contrast
+    contrast_in_place(&mut image, 200.0);
 
     // Save the response
     let mut img_buf = BufWriter::new(Cursor::new(Vec::new()));
@@ -326,17 +392,26 @@ pub async fn epaper_page(
     if let Err(e) = match q.output {
         OutputEnum::Full => image.write_to(&mut img_buf, ImageFormat::Png),
         // Paint black only black. Otherwise White
-        OutputEnum::Black => map_pixels(&image, |_x, _y, p| {
-            let red = p.channels()[0];
-            let blue = p.channels()[2];
-            Luma([red | blue])
-        }).write_to(&mut img_buf, ImageFormat::Png),
+        OutputEnum::Black => {
+            let mut bw_img = map_pixels(&image, |_x, _y, p| {
+                let red = p.channels()[0];
+                let blue = p.channels()[2];
+                Luma([(red | blue)])
+            });
+            dither(&mut bw_img, &BiLevel);
+            bw_img.write_to(&mut img_buf, ImageFormat::Png)
+        }
         // Paint Red only Red. Otherwise transparent
-        OutputEnum::Red => map_pixels(&image, |_x, _y, p| {
-            let red = p.channels()[0];
-            let blue = p.channels()[2];
-            Rgba([255_u8, 0_u8, 0_u8, (red & (! blue))])
-        }).write_to(&mut img_buf, ImageFormat::Png)
+        OutputEnum::Red => {
+            let mut bw_img = map_pixels(&image, |_x, _y, p| {
+                let red = p.channels()[0];
+                let blue = p.channels()[2];
+                Luma([(red & (!blue))])
+            });
+            dither(&mut bw_img, &BiLevel);
+            map_pixels(&bw_img, |_x, _y, p| LumaA([255, p.channels()[0]]))
+                .write_to(&mut img_buf, ImageFormat::Png)
+        }
     } {
         return ApiError::InternalError(e.into()).into_response();
     }

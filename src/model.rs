@@ -1,4 +1,7 @@
-use std::{collections::{BTreeMap, HashMap}, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use serde::{Deserialize, Serialize};
 use time::{Date, OffsetDateTime};
@@ -61,16 +64,15 @@ pub struct WeatherInfo {
 
 pub type WeatherInfoArc = Arc<RwLock<Option<WeatherInfo>>>;
 
-
 // * Route mode
 
-#[derive(Deserialize, Default)]
-#[serde(rename_all="lowercase")]
+#[derive(Deserialize, Default, Debug)]
+#[serde(rename_all = "lowercase")]
 pub enum QueryRouteEPaperOutputEnum {
     #[default]
     Full,
     Black,
-    Red
+    Red,
 }
 
 #[derive(Deserialize, Default)]
@@ -78,5 +80,3 @@ pub struct QueryRouteEPaperModel {
     #[serde(default)]
     pub output: QueryRouteEPaperOutputEnum,
 }
-
-
