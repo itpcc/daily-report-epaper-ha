@@ -8,7 +8,8 @@ use image::{
     imageops::{
         colorops::{contrast_in_place, dither},
         BiLevel,
-    }, Luma, Pixel, Rgba
+    },
+    Luma, Pixel, Rgba,
 };
 use imageproc::{
     drawing,
@@ -78,7 +79,6 @@ pub async fn epaper_page(
     State(state): State<AppState>,
     Query(q): Query<QueryRouteEPaperModel>,
 ) -> impl IntoResponse {
-    // TODO place real value
     let time_utc = time::OffsetDateTime::now_utc();
     let time_local =
         time_utc.to_timezone(timezones::get_by_name("Asia/Bangkok").unwrap_or(timezones::db::UTC));
@@ -427,7 +427,8 @@ pub async fn epaper_page(
             map_pixels(&bw_img, |_x, _y, p| {
                 let l = p.channels()[0];
                 Rgba([l, 0_u8, 0_u8, l])
-            }).write_to(&mut img_buf, ImageFormat::Png)
+            })
+            .write_to(&mut img_buf, ImageFormat::Png)
         }
     } {
         return ApiError::InternalError(e.into()).into_response();

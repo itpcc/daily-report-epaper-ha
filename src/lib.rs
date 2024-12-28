@@ -14,6 +14,7 @@ pub mod telemetry;
 pub use cfg::*;
 pub use db::*;
 use model::{CalendarMap, WeatherInfoArc};
+use time::PrimitiveDateTime;
 use time_tz::{timezones, Tz};
 use tokio::sync::RwLock;
 
@@ -24,6 +25,7 @@ pub struct AppState {
     pub tz: &'static Tz,
     pub calendar: Arc<RwLock<CalendarMap>>,
     pub weather: WeatherInfoArc,
+    pub last_update: Arc<RwLock<PrimitiveDateTime>>,
 }
 
 pub fn router(
@@ -31,6 +33,7 @@ pub fn router(
     db: Db,
     calendar: Arc<RwLock<CalendarMap>>,
     weather: WeatherInfoArc,
+    last_update: Arc<RwLock<PrimitiveDateTime>>,
 ) -> Router {
     let tz = timezones::get_by_name(&cfg.tz).unwrap_or(timezones::db::UTC);
     let app_state = AppState {
@@ -39,6 +42,7 @@ pub fn router(
         tz,
         calendar,
         weather,
+        last_update,
     };
 
     // Middleware that adds high level tracing to a Service.

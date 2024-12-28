@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use server::{cron, model::CalendarMap, telemetry, Configuration, Db};
+use time::{OffsetDateTime, PrimitiveDateTime};
 use tokio::{net::TcpListener, sync::RwLock};
 
 #[tokio::main]
@@ -29,13 +30,24 @@ async fn main() {
     // Initialize calendar state
     let calendar = Arc::new(RwLock::new(CalendarMap::new()));
     let weather = Arc::new(RwLock::new(Default::default()));
+    let now_odt = OffsetDateTime::now_utc();
+    let last_update = Arc::new(RwLock::new(PrimitiveDateTime::new(
+        now_odt.date(),
+        now_odt.time(),
+    )));
 
     // Spin up our server.
     tracing::info!("Starting server on {}", cfg.listen_address);
     let listener = TcpListener::bind(&cfg.listen_address)
         .await
         .expect("Failed to bind address");
-    let router = server::router(cfg.clone(), db, calendar.clone(), weather.clone());
+    let router = server::router(
+        cfg.clone(),
+        db,
+        calendar.clone(),
+        weather.clone(),
+        last_update.clone(),
+    );
     let http_task = async {
         axum::serve(listener, router)
             .await
@@ -43,9 +55,14 @@ async fn main() {
     };
 
     // Spin up cron
-    let cron = cron::setup(cfg.clone(), calendar.clone(), weather.clone())
-        .await
-        .expect("Failed to start Cron");
+    let cron = cron::setup(
+        cfg.clone(),
+        calendar.clone(),
+        weather.clone(),
+        last_update.clone(),
+    )
+    .await
+    .expect("Failed to start Cron");
     let cron_task = async {
         cron.start().await.expect("Failed to run Cron");
     };

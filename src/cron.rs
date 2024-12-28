@@ -1,17 +1,23 @@
 use crate::{
     api_error::ApiError,
-    model::{CalendarMapArc, DateInfo, DateInfoEventMode, WeatherInfo, WeatherInfoArc},
+    model::{
+        CalendarMapArc, DateInfo, DateInfoEventMode, LastUpdateArc, WeatherInfo, WeatherInfoArc,
+    },
     Config,
 };
 use ical::parser::Component;
 use itertools::Itertools;
 use std::io::Cursor;
-use time::{format_description::well_known::Iso8601, Date, PrimitiveDateTime};
+use time::{format_description::well_known::Iso8601, Date, OffsetDateTime, PrimitiveDateTime};
 use time_tz::{timezones, OffsetResult, PrimitiveDateTimeExt};
 use tokio::task::JoinSet;
 use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
 
-async fn fetch_holiday(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiError> {
+async fn fetch_holiday(
+    cfg: Config,
+    calendar: CalendarMapArc,
+    last_update: LastUpdateArc,
+) -> Result<(), ApiError> {
     let res = reqwest::Client::new()
         .get(cfg.ical_holiday.clone())
         .send()
@@ -35,6 +41,7 @@ async fn fetch_holiday(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiE
         .collect_vec();
 
     let mut calendar = calendar.write().await;
+    let mut is_update = false;
 
     holiday_icals.into_iter().for_each(|evnt| {
         let (Some(dtstart), Some(summary)) = (
@@ -55,13 +62,32 @@ async fn fetch_holiday(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiE
             holiday: Default::default(),
             events: Default::default(),
         });
+
+        if c_nty
+            .holiday
+            .as_ref()
+            .map(|smr| *smr != summary)
+            .unwrap_or(true)
+        {
+            is_update = true;
+        }
+
         c_nty.holiday.replace(summary);
     });
+
+    if is_update {
+        let now_odt = OffsetDateTime::now_utc();
+        *(last_update.write().await) = PrimitiveDateTime::new(now_odt.date(), now_odt.time());
+    }
 
     Ok(())
 }
 
-async fn fetch_event(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiError> {
+async fn fetch_event(
+    cfg: Config,
+    calendar: CalendarMapArc,
+    last_update: LastUpdateArc,
+) -> Result<(), ApiError> {
     let res = reqwest::Client::new()
         .get(cfg.ical_event.clone())
         .send()
@@ -85,6 +111,7 @@ async fn fetch_event(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiErr
         .collect_vec();
 
     let mut calendar = calendar.write().await;
+    let mut is_update = false;
 
     event_icals.into_iter().for_each(|evnt| {
         let (Some(dtstart), Some(summary), Some(uid)) = (
@@ -131,6 +158,11 @@ async fn fetch_event(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiErr
             holiday: Default::default(),
             events: Default::default(),
         });
+
+        if !c_nty.events.contains_key(&uid) {
+            is_update = true;
+        }
+
         c_nty.events.insert(
             uid,
             DateInfoEventMode {
@@ -140,10 +172,19 @@ async fn fetch_event(cfg: Config, calendar: CalendarMapArc) -> Result<(), ApiErr
         );
     });
 
+    if is_update {
+        let now_odt = OffsetDateTime::now_utc();
+        *(last_update.write().await) = PrimitiveDateTime::new(now_odt.date(), now_odt.time());
+    }
+
     Ok(())
 }
 
-async fn fetch_weather(cfg: Config, weather: WeatherInfoArc) -> Result<(), ApiError> {
+async fn fetch_weather(
+    cfg: Config,
+    weather: WeatherInfoArc,
+    last_update: LastUpdateArc,
+) -> Result<(), ApiError> {
     let res = reqwest::Client::new()
         .get(format! {"{}/api/states/weather.forecast_home", cfg.ha_url})
         .bearer_auth(cfg.ha_token.clone())
@@ -154,7 +195,21 @@ async fn fetch_weather(cfg: Config, weather: WeatherInfoArc) -> Result<(), ApiEr
         .await
         .map_err(|e| ApiError::InternalError(e.into()))?;
 
+    let is_update = weather
+        .read()
+        .await
+        .as_ref()
+        .map(|wth| {
+            wth.state != res.state || wth.attributes.temperature != res.attributes.temperature
+        })
+        .unwrap_or(true);
+
     weather.write().await.replace(res);
+
+    if is_update {
+        let now_odt = OffsetDateTime::now_utc();
+        *(last_update.write().await) = PrimitiveDateTime::new(now_odt.date(), now_odt.time());
+    }
 
     Ok(())
 }
@@ -163,12 +218,25 @@ async fn fetch(
     cfg: Config,
     calendar: CalendarMapArc,
     weather: WeatherInfoArc,
+    last_update: LastUpdateArc,
 ) -> Result<(), ApiError> {
     let mut set = JoinSet::new();
 
-    set.spawn(fetch_holiday(cfg.clone(), calendar.clone()));
-    set.spawn(fetch_event(cfg.clone(), calendar.clone()));
-    set.spawn(fetch_weather(cfg.clone(), weather.clone()));
+    set.spawn(fetch_holiday(
+        cfg.clone(),
+        calendar.clone(),
+        last_update.clone(),
+    ));
+    set.spawn(fetch_event(
+        cfg.clone(),
+        calendar.clone(),
+        last_update.clone(),
+    ));
+    set.spawn(fetch_weather(
+        cfg.clone(),
+        weather.clone(),
+        last_update.clone(),
+    ));
 
     while let Some(res) = set.join_next().await {
         if let Ok(Err(e)) = res {
@@ -183,11 +251,19 @@ pub async fn setup(
     cfg: Config,
     calendar: CalendarMapArc,
     weather: WeatherInfoArc,
+    last_update: LastUpdateArc,
 ) -> Result<JobScheduler, JobSchedulerError> {
     let mut sched = JobScheduler::new().await?;
 
     // Run init job
-    if let Err(e) = fetch(cfg.clone(), calendar.clone(), weather.clone()).await {
+    if let Err(e) = fetch(
+        cfg.clone(),
+        calendar.clone(),
+        weather.clone(),
+        last_update.clone(),
+    )
+    .await
+    {
         tracing::error!("Cron init: Unable to fetch holiday: {:?}", e);
     }
     tracing::info!("Cron init: Run success");
@@ -197,10 +273,11 @@ pub async fn setup(
         .add(Job::new_async("0 */5 * * * *", move |_uuid, _l| {
             let clnd = calendar.clone();
             let wth = weather.clone();
+            let lu_c = last_update.clone();
             let cfg_c = cfg.clone();
             Box::pin(async move {
                 tracing::debug!("Cron job: start");
-                if let Err(e) = fetch(cfg_c, clnd.clone(), wth.clone()).await {
+                if let Err(e) = fetch(cfg_c, clnd.clone(), wth.clone(), lu_c.clone()).await {
                     tracing::error!("Cron init: Unable to fetch holiday: {:?}", e);
                 }
                 tracing::info!("Cron job: Run success");

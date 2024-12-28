@@ -4,7 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use time::{Date, OffsetDateTime};
+use time::{Date, OffsetDateTime, PrimitiveDateTime};
 use tokio::sync::RwLock;
 
 #[derive(Serialize, Clone, Debug)]
@@ -23,7 +23,7 @@ pub struct DateInfo {
 pub type CalendarMap = BTreeMap<Date, DateInfo>;
 pub type CalendarMapArc = Arc<RwLock<CalendarMap>>;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum WeatherInfoState {
     ClearNight,
@@ -81,3 +81,5 @@ pub struct QueryRouteEPaperModel {
     #[serde(default)]
     pub output: QueryRouteEPaperOutputEnum,
 }
+
+pub type LastUpdateArc = Arc<RwLock<PrimitiveDateTime>>;

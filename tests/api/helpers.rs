@@ -1,6 +1,7 @@
 use axum::{body::Body, http::Request, http::Response, Router};
 use sqlx::{Connection, Executor, PgConnection};
 use std::sync::{Arc, Once};
+use time::{OffsetDateTime, PrimitiveDateTime};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -43,8 +44,19 @@ impl TestApp {
         // Initialize calendar state
         let calendar = Arc::new(RwLock::new(CalendarMap::new()));
         let weather = Arc::new(RwLock::new(Default::default()));
+        let now_odt = OffsetDateTime::now_utc();
+        let last_update = Arc::new(RwLock::new(PrimitiveDateTime::new(
+            now_odt.date(),
+            now_odt.time(),
+        )));
 
-        let router = server::router(cfg.clone(), db.clone(), calendar.clone(), weather.clone());
+        let router = server::router(
+            cfg.clone(),
+            db.clone(),
+            calendar.clone(),
+            weather.clone(),
+            last_update.clone(),
+        );
         Self { db, router }
     }
 
