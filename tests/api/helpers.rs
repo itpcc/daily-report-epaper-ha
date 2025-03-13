@@ -1,4 +1,4 @@
-use axum::{body::Body, http::Request, http::Response, Router};
+use axum::{Router, body::Body, http::Request, http::Response};
 use sqlx::{Connection, Executor, PgConnection};
 use std::sync::{Arc, Once};
 use time::{OffsetDateTime, PrimitiveDateTime};
@@ -6,7 +6,7 @@ use tokio::sync::RwLock;
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use server::{model::CalendarMap, telemetry, Configuration, Db};
+use server::{Configuration, Db, model::CalendarMap, telemetry};
 
 static TRACING: Once = Once::new();
 

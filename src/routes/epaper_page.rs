@@ -5,11 +5,11 @@ use axum::{
     response::IntoResponse,
 };
 use image::{
-    imageops::{
-        colorops::{contrast_in_place, dither},
-        BiLevel,
-    },
     Luma, Pixel, Rgba,
+    imageops::{
+        BiLevel,
+        colorops::{contrast_in_place, dither},
+    },
 };
 use imageproc::{
     drawing,
@@ -20,14 +20,15 @@ use imageproc::{
 use itertools::Itertools;
 use std::io::{BufWriter, Cursor};
 use time::{Month, Weekday};
-use time_tz::{timezones, OffsetDateTimeExt};
+use time_tz::{OffsetDateTimeExt, timezones};
 
 use crate::{
+    AppState,
     api_error::ApiError,
     model::{
-        CalendarMap, QueryRouteEPaperFormatEnum, QueryRouteEPaperModel, QueryRouteEPaperOutputEnum as OutputEnum, WeatherInfoState
+        CalendarMap, QueryRouteEPaperFormatEnum, QueryRouteEPaperModel,
+        QueryRouteEPaperOutputEnum as OutputEnum, WeatherInfoState,
     },
-    AppState,
 };
 
 fn month_abbr(mth: Month) -> String {

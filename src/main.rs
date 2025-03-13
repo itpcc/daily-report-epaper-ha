@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use server::{cron, model::CalendarMap, telemetry, Configuration, Db};
+use server::{Configuration, Db, cron, model::CalendarMap, telemetry};
 use time::{OffsetDateTime, PrimitiveDateTime};
 use tokio::{net::TcpListener, sync::RwLock};
 

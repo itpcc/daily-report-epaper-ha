@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 
 pub mod epaper_page;
 pub mod health_check;

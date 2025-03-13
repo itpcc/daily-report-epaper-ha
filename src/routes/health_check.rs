@@ -1,7 +1,7 @@
-use axum::{extract::State, Json};
-use serde_json::{json, Value};
+use axum::{Json, extract::State};
+use serde_json::{Value, json};
 
-use crate::{api_error::ApiError, AppState};
+use crate::{AppState, api_error::ApiError};
 
 pub async fn health_check() -> Result<Json<Value>, ApiError> {
     Ok(Json(json!({ "status": "ok" })))

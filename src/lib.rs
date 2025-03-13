@@ -15,7 +15,7 @@ pub use cfg::*;
 pub use db::*;
 use model::{CalendarMap, WeatherInfoArc};
 use time::PrimitiveDateTime;
-use time_tz::{timezones, Tz};
+use time_tz::{Tz, timezones};
 use tokio::sync::RwLock;
 
 #[derive(Clone)]

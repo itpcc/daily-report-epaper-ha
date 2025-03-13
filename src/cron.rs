@@ -1,15 +1,15 @@
 use crate::{
+    Config,
     api_error::ApiError,
     model::{
         CalendarMapArc, DateInfo, DateInfoEventMode, LastUpdateArc, WeatherInfo, WeatherInfoArc,
     },
-    Config,
 };
 use ical::parser::Component;
 use itertools::Itertools;
 use std::io::Cursor;
-use time::{format_description::well_known::Iso8601, Date, OffsetDateTime, PrimitiveDateTime};
-use time_tz::{timezones, OffsetResult, PrimitiveDateTimeExt};
+use time::{Date, OffsetDateTime, PrimitiveDateTime, format_description::well_known::Iso8601};
+use time_tz::{OffsetResult, PrimitiveDateTimeExt, timezones};
 use tokio::task::JoinSet;
 use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
 
