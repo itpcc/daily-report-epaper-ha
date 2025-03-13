@@ -76,10 +76,20 @@ pub enum QueryRouteEPaperOutputEnum {
     Red,
 }
 
+#[derive(Deserialize, Default, Debug, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum QueryRouteEPaperFormatEnum {
+    #[default]
+    Png,
+    Bmp,
+}
+
 #[derive(Deserialize, Default)]
 pub struct QueryRouteEPaperModel {
     #[serde(default)]
     pub output: QueryRouteEPaperOutputEnum,
+    #[serde(default)]
+    pub format: QueryRouteEPaperFormatEnum,
 }
 
 pub type LastUpdateArc = Arc<RwLock<PrimitiveDateTime>>;

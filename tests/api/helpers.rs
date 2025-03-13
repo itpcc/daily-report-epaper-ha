@@ -22,7 +22,7 @@ impl TestApp {
         dotenvy::dotenv().ok();
 
         // Set port to 0 so tests can spawn multiple servers on OS assigned ports.
-        std::env::set_var("PORT", "0");
+        unsafe { std::env::set_var("PORT", "0") };
 
         // Setup tracing. Once.
         TRACING.call_once(telemetry::setup_tracing);

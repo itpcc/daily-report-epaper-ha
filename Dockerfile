@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:0.1.68-rust-bookworm as chef
+FROM lukemathwalker/cargo-chef:0.1.71-rust-bookworm as chef
 WORKDIR /app
 # Change mirror to KKU to speed up resolving
 RUN sed -i 's/deb\.debian\.org/mirror.kku.ac.th/g' /etc/apt/sources.list.d/debian.sources

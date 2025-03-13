@@ -42,7 +42,7 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         // Log detailed error for telemetry.
         let error_to_log = match &self {
-            ApiError::InvalidJsonBody(ref err) => match err {
+            ApiError::InvalidJsonBody(err) => match err {
                 JsonRejection::JsonDataError(e) => e.body_text(),
                 JsonRejection::JsonSyntaxError(e) => e.body_text(),
                 JsonRejection::MissingJsonContentType(_) => {
@@ -52,8 +52,8 @@ impl IntoResponse for ApiError {
                 _ => "Unknown error".to_string(),
             },
             ApiError::InvalidRequest(_) => format!("{}", self),
-            ApiError::DatabaseError(ref err) => format!("{}", err),
-            ApiError::InternalError(ref err) => format!("{}", err),
+            ApiError::DatabaseError(err) => format!("{}", err),
+            ApiError::InternalError(err) => format!("{}", err),
         };
         error!("{}", error_to_log);
 

@@ -25,8 +25,7 @@ use time_tz::{timezones, OffsetDateTimeExt};
 use crate::{
     api_error::ApiError,
     model::{
-        CalendarMap, QueryRouteEPaperModel, QueryRouteEPaperOutputEnum as OutputEnum,
-        WeatherInfoState,
+        CalendarMap, QueryRouteEPaperFormatEnum, QueryRouteEPaperModel, QueryRouteEPaperOutputEnum as OutputEnum, WeatherInfoState
     },
     AppState,
 };
@@ -397,10 +396,14 @@ pub async fn epaper_page(
     contrast_in_place(&mut image, 200.0);
 
     // Save the response
+    let img_fmt = match q.format {
+        QueryRouteEPaperFormatEnum::Bmp => ImageFormat::Bmp,
+        _ => ImageFormat::Png,
+    };
     let mut img_buf = BufWriter::new(Cursor::new(Vec::new()));
 
     if let Err(e) = match q.output {
-        OutputEnum::Full => image.write_to(&mut img_buf, ImageFormat::Png),
+        OutputEnum::Full => image.write_to(&mut img_buf, img_fmt),
         // Paint black only black. Otherwise White
         OutputEnum::Black | OutputEnum::BlackInvert => {
             let mut bw_img = map_pixels(&image, |_x, _y, p| {
@@ -414,7 +417,7 @@ pub async fn epaper_page(
                 }])
             });
             dither(&mut bw_img, &BiLevel);
-            bw_img.write_to(&mut img_buf, ImageFormat::Png)
+            bw_img.write_to(&mut img_buf, img_fmt)
         }
         // Paint Red only Red. Otherwise transparent
         OutputEnum::Red => {
@@ -428,7 +431,7 @@ pub async fn epaper_page(
                 let l = p.channels()[0];
                 Rgba([l, 0_u8, 0_u8, l])
             })
-            .write_to(&mut img_buf, ImageFormat::Png)
+            .write_to(&mut img_buf, img_fmt)
         }
     } {
         return ApiError::InternalError(e.into()).into_response();
@@ -444,7 +447,12 @@ pub async fn epaper_page(
     let mut res = img_vec.into_response();
     res.headers_mut().insert(
         axum::http::header::CONTENT_TYPE,
-        HeaderValue::from_static("image/png"),
+        HeaderValue::from_static(match img_fmt {
+            ImageFormat::Jpeg => "image/jpeg",
+            ImageFormat::Gif => "image/gif",
+            ImageFormat::Bmp => "image/bmp",
+            _ => "image/png",
+        }),
     );
     res
 }
